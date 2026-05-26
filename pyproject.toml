@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-agent"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "AI-driven functional testing agent. Point it at a URL; it explores the app, generates a test plan, runs it, and reports findings. Web + visual regression + accessibility in v0.1; API + mobile in later versions."
 readme = "README.md"
 license = { file = "LICENSE" }

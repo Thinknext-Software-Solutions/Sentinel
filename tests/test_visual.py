@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,32 @@ from sentinel.visual import check_against_baseline
 
 def write_image(path: Path, size=(50, 50), color=(255, 255, 255)) -> None:
     Image.new("RGB", size, color).save(path)
+
+
+class TestLoggingDoesNotCrash:
+    """Regression: visual.py used extra={"name": ...} which collides with
+    Python LogRecord's reserved 'name' attribute. First live run crashed
+    with KeyError. This test exercises the log path with a real Python
+    logger to catch the bug at unit-test time."""
+
+    def test_baseline_capture_logs_cleanly(self, tmp_path, caplog):
+        current = tmp_path / "homepage.png"
+        write_image(current, color=(255, 0, 0))
+        baselines = tmp_path / "baselines"
+
+        with caplog.at_level(logging.INFO, logger="sentinel.visual"):
+            diff = check_against_baseline(
+                name="homepage",
+                current_path=current,
+                baseline_dir=baselines,
+            )
+
+        assert diff is None
+        # If we got here without a KeyError, the log call succeeded.
+        # Also assert the log record actually went out.
+        assert any(
+            "baseline_captured" in r.message for r in caplog.records
+        )
 
 
 class TestCheckAgainstBaseline:
