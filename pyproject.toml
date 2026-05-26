@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-agent"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "AI-driven functional testing agent. Point it at a URL; it explores the app, generates a test plan, runs it, and reports findings. Web + visual regression + accessibility in v0.1; API + mobile in later versions."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -38,6 +38,7 @@ dependencies = [
     "PyYAML>=6.0",
     "playwright>=1.40",
     "pillow>=10.0",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

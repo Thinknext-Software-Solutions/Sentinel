@@ -14,14 +14,19 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
+from typing import Optional
+
+from cascade.llm import LLMClient
 
 from .a11y import scan_page
 from .browser import open_session, run_step
 from .config import SentinelConfig
+from .planner import regenerate_step
 from .schemas import (
     A11yViolation,
     ScenarioRun,
     SentinelReport,
+    Step,
     TestFailure,
     TestPlan,
     VisualDiff,
@@ -37,6 +42,8 @@ def run_plan(
     plan: TestPlan,
     config: SentinelConfig,
     workspace_dir: Path,
+    llm: Optional[LLMClient] = None,
+    self_heal: bool = True,
 ) -> SentinelReport:
     """Run a TestPlan and return a SentinelReport.
 
@@ -44,6 +51,11 @@ def run_plan(
         plan: The TestPlan to execute.
         config: Sentinel config (browser settings, thresholds, etc.).
         workspace_dir: Directory for screenshots, diffs, baselines.
+        llm: Optional LLM client. If provided AND self_heal=True, failed
+            steps trigger one LLM-driven repair attempt before the
+            scenario gives up.
+        self_heal: Whether to attempt self-healing on step failures.
+            No-op if `llm` is None.
 
     Returns:
         SentinelReport with one ScenarioRun per scenario plus
@@ -51,8 +63,14 @@ def run_plan(
     """
     screenshots_dir = workspace_dir / "screenshots"
     baselines_dir = workspace_dir / config.visual.baseline_dir
+    healing_enabled = self_heal and llm is not None
 
     report = SentinelReport(target_url=plan.target_url, plan_summary=plan.summary)
+    # LLMUsage is frozen, so we accumulate self-healing token usage in
+    # plain ints and add them to the report at the end.
+    repair_in_tokens = 0
+    repair_out_tokens = 0
+    repair_cost_usd = 0.0
 
     for scenario in plan.scenarios:
         scenario_start = time.time()
@@ -69,6 +87,50 @@ def run_plan(
                     continue
 
                 result = run_step(session, step)
+
+                # Self-healing: if the step failed and we have an LLM,
+                # ask for a better selector and retry once.
+                if not result.passed and healing_enabled and step.action in (
+                    "click", "fill", "wait_for", "assert_visible"
+                ):
+                    try:
+                        page_html = session.page.content()
+                        repair = regenerate_step(
+                            original_step=step,
+                            failure_message=result.message,
+                            scenario_name=scenario.name,
+                            page_html=page_html,
+                            llm=llm,  # type: ignore[arg-type]
+                        )
+                        repair_in_tokens += repair.usage.input_tokens
+                        repair_out_tokens += repair.usage.output_tokens
+                        repair_cost_usd += repair.usage.estimated_cost_usd
+                        logger.info(
+                            "sentinel.runner.retry_with_repair",
+                            extra={
+                                "scenario": scenario.name,
+                                "step_index": step_index,
+                                "reasoning": repair.reasoning[:120],
+                            },
+                        )
+                        retry_result = run_step(session, repair.repaired_step)
+                        if retry_result.passed:
+                            result = retry_result  # treat as success
+                        else:
+                            # Augment the original failure message so the
+                            # report tells the reader self-healing was tried.
+                            result.message = (
+                                f"{result.message}\n\n[self-heal retry also failed: "
+                                f"{retry_result.message}]"
+                            )
+                    except Exception as exc:  # noqa: BLE001
+                        # Don't let a flaky self-heal call mask the
+                        # original failure. Log the actual exception
+                        # so debugging doesn't require source-diving.
+                        logger.warning(
+                            "sentinel.runner.self_heal_failed: %s",
+                            f"{type(exc).__name__}: {exc}",
+                        )
 
                 # Visual regression check, if this was a screenshot step
                 if (
@@ -123,6 +185,11 @@ def run_plan(
     from datetime import datetime, timezone
 
     report.finished_at = datetime.now(timezone.utc)
+    # Fold any self-healing LLM cost into the report so the user sees
+    # the full bill, not just the planner stage.
+    report.total_input_tokens += repair_in_tokens
+    report.total_output_tokens += repair_out_tokens
+    report.total_llm_cost_usd += repair_cost_usd
     logger.info(
         "sentinel.runner.complete",
         extra={
@@ -130,6 +197,8 @@ def run_plan(
             "passed": sum(1 for s in report.scenario_runs if s.passed),
             "visual_diffs": len(report.visual_diffs),
             "a11y_violations": len(report.a11y_violations),
+            "repair_calls_in": repair_in_tokens,
+            "repair_calls_out": repair_out_tokens,
         },
     )
     return report

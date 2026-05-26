@@ -15,8 +15,9 @@ import logging
 from dataclasses import dataclass
 
 from cascade.llm import LLMClient, LLMUsage
+from pydantic import BaseModel, ConfigDict, Field
 
-from .schemas import TestPlan
+from .schemas import Step, TestPlan
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,15 @@ logger = logging.getLogger(__name__)
 class PlanOutcome:
     plan: TestPlan
     usage: LLMUsage
+
+
+@dataclass(frozen=True)
+class StepRepair:
+    """Outcome of asking the LLM to fix a failed step."""
+
+    repaired_step: "Step"
+    usage: LLMUsage
+    reasoning: str = ""
 
 
 def generate_plan(
@@ -136,4 +146,118 @@ def _build_user_prompt(target_url: str, page_html: str, page_text: str) -> str:
         f"# Rendered HTML\n\n```html\n{html_snippet}{html_truncated_note}\n```\n\n"
         f"---\n\n"
         f"Generate a TestPlan with 2-5 focused scenarios."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Self-healing: re-plan a single failed step
+# ---------------------------------------------------------------------------
+
+
+class _RepairedStepEnvelope(BaseModel):
+    """Wraps a Step with a short reasoning string so the LLM explains itself."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reasoning: str = Field(
+        ...,
+        min_length=10,
+        max_length=400,
+        description="One-line explanation of why the original step failed and how this fix addresses it.",
+    )
+    step: Step
+
+
+def regenerate_step(
+    *,
+    original_step: Step,
+    failure_message: str,
+    scenario_name: str,
+    page_html: str,
+    llm: LLMClient,
+    temperature: float = 0.0,
+) -> StepRepair:
+    """Ask the LLM to fix a failed step.
+
+    The typical failure: Playwright strict-mode rejection because the
+    selector matches multiple elements. The LLM sees the failure
+    message (which Playwright populates with the matching elements)
+    and returns a more specific selector.
+
+    Args:
+        original_step: The Step that failed.
+        failure_message: Playwright error text. Includes matching
+            elements in strict-mode failures.
+        scenario_name: For context in the prompt.
+        page_html: Current page HTML; lets the LLM see what's actually there.
+        llm: LLM client (same provider as the rest of the run).
+        temperature: 0.0 by default; repairs should be deterministic.
+
+    Returns:
+        StepRepair with a new Step the runner can substitute.
+    """
+    system = (
+        "You are a senior QA engineer fixing one failed step in an "
+        "automated test scenario. The step failed because Playwright "
+        "could not act on the original selector (usually because the "
+        "selector matched multiple elements and Playwright's strict "
+        "mode refused to guess, or because the selector did not exist "
+        "at all). Your job is to rewrite ONLY this step so it works.\n\n"
+        "Rules:\n\n"
+        "  * Keep the same action and same description.\n"
+        "  * Pick the most specific selector that targets exactly one "
+        "    element. Prefer get_by_role syntax: "
+        "    'role=heading[name=\"Foo\"]' over 'text=Foo'.\n"
+        "  * If multiple elements legitimately match, pick the first "
+        "    one in document order and disambiguate by parent: "
+        "    'role=heading[name=\"Foo\"] >> nth=0' or use a CSS "
+        "    selector that includes the parent: '#main h2:has-text(\"Foo\")'.\n"
+        "  * For text assertions, prefer assert_visible with a specific "
+        "    role-based selector over assert_text with a substring.\n"
+        "  * Do NOT change the action type (no swapping click for "
+        "    assert_visible) unless the original action is the actual problem.\n\n"
+        "Output a Step plus a one-line reasoning explaining your fix."
+    )
+
+    user = (
+        f"# Scenario context\n\n{scenario_name}\n\n"
+        f"---\n\n"
+        f"# Original step (failed)\n\n"
+        f"action: {original_step.action}\n"
+        f"selector: {original_step.selector!r}\n"
+        f"value: {original_step.value!r}\n"
+        f"description: {original_step.description}\n\n"
+        f"---\n\n"
+        f"# Playwright failure message\n\n```\n{failure_message[:2000]}\n```\n\n"
+        f"---\n\n"
+        f"# Current page HTML (first 20k chars)\n\n```html\n{page_html[:20_000]}\n```\n\n"
+        f"---\n\n"
+        f"Output a repaired Step that resolves the failure."
+    )
+
+    response = llm.structured_call(
+        system=system,
+        user=user,
+        schema=_RepairedStepEnvelope,
+        max_tokens=2048,
+        temperature=temperature,
+    )
+
+    repaired = response.parsed.step
+    # Preserve the original description so the failure report stays
+    # human-readable; we don't want self-healing to rewrite intent.
+    repaired = repaired.model_copy(update={"description": original_step.description})
+
+    logger.info(
+        "sentinel.planner.step_repaired",
+        extra={
+            "scenario": scenario_name,
+            "original_selector": original_step.selector,
+            "repaired_selector": repaired.selector,
+        },
+    )
+    return StepRepair(
+        repaired_step=repaired,
+        usage=response.usage,
+        reasoning=response.parsed.reasoning,
     )
