@@ -58,7 +58,7 @@ def check_against_baseline(
         _copy_image(current_path, baseline_path)
         logger.info(
             "sentinel.visual.baseline_captured",
-            extra={"name": name, "path": str(baseline_path)},
+            extra={"screenshot_name": name, "path": str(baseline_path)},
         )
         return None
 
