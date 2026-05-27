@@ -7,13 +7,49 @@ SQLite at server_home()/studio.db. Foreign keys turned on per connection
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import Iterator
+from datetime import datetime, timezone
+from typing import Iterator, Optional
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import DateTime, create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.types import TypeDecorator
 
 from .paths import db_path, ensure_dirs
+
+
+class UtcDateTime(TypeDecorator):
+    """SQLite-friendly DateTime that always roundtrips as aware UTC.
+
+    SQLite's native datetime support is naive strings. SQLAlchemy
+    DateTime(timezone=True) on SQLite returns naive datetimes on read,
+    which then serialize without a tz suffix and get misinterpreted by
+    JS as local time. This decorator stores everything as UTC and tags
+    incoming values from the DB with timezone.utc so consumers see
+    aware datetimes.
+    """
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(
+        self, value: Optional[datetime], dialect
+    ) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            # Caller passed a naive datetime; we assume UTC.
+            return value
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+    def process_result_value(
+        self, value: Optional[datetime], dialect
+    ) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
 
 class Base(DeclarativeBase):

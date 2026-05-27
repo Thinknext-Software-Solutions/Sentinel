@@ -67,7 +67,43 @@ sentinel init
 
 This scaffolds `sentinel.yaml` with sensible defaults you can edit.
 
-## Run
+## Sentinel Studio (web UI, multi-user)
+
+For teams who want a UI instead of the CLI alone, Sentinel ships with **Studio**: a self-hosted web app for projects, runs, history, and user management. Single SQLite database, runs in your network, no SaaS account.
+
+```bash
+pip install 'sentinel-agent[server,anthropic]'   # or [server,claude-code], etc.
+sentinel server init                              # prompts for admin email + password
+sentinel server up                                # http://127.0.0.1:8000
+```
+
+Three global roles: **admin** (manage users + everything), **member** (create projects, trigger runs), **viewer** (read-only). All state lives at `~/.local/share/sentinel/studio.db` (override with `SENTINEL_SERVER_HOME`).
+
+### Sign in
+
+![Studio login](docs/studio-screenshots/01-login.png)
+
+### Projects: each project is a named app with its own URL + config
+
+![Studio projects](docs/studio-screenshots/02-projects.png)
+
+### Project detail: trigger a run, see history, edit the per-project sentinel.yaml
+
+![Studio project detail](docs/studio-screenshots/03-project-detail.png)
+
+### Run detail: scenarios, step failures, visual diffs, a11y violations, cost
+
+![Studio run detail](docs/studio-screenshots/04-run-detail.png)
+
+### Admin: invite users, change roles, deactivate
+
+![Studio admin users](docs/studio-screenshots/05-admin-users.png)
+
+Studio re-uses your existing LLM credentials from `~/.config/sentinel/config.yaml`, so a project that says "provider: claude_code" will run for free if your subscription is configured. Studio is bundled as an optional install extra (`[server]`) so the core CLI install stays slim. The frontend is React + Vite + TanStack Query, served from the same FastAPI app via a SPA fallback.
+
+## CLI: run against a URL
+
+
 
 ```bash
 sentinel run https://cascadeagent.dev
@@ -102,6 +138,7 @@ sentinel run https://cascadeagent.dev
 | Accessibility scan (axe-core 4.10, WCAG 2.1 AA) | `sentinel.a11y` |
 | REST API contract testing (OpenAPI + URL-probe modes) | `sentinel.api_*` |
 | Multi-LLM (Anthropic / OpenAI / Google / Claude Code / Ollama) | `sentinel.llm` |
+| **Studio (web UI, multi-user, SQLite-backed)** | `sentinel.server` (new in 0.2) |
 | Mobile (React Native via Detox) | planned for a future release |
 
 ## How it differs from existing tools

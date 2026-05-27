@@ -18,7 +18,6 @@ from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -28,7 +27,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .db import Base
+from .db import Base, UtcDateTime
 
 
 def _uuid() -> str:
@@ -53,8 +52,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(16), nullable=False, default="member")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_utcnow)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(UtcDateTime())
 
     sessions: Mapped[list["UserSession"]] = relationship(
         "UserSession", back_populates="user", cascade="all, delete-orphan"
@@ -71,8 +70,8 @@ class UserSession(Base):
     user_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     user_agent: Mapped[str] = mapped_column(String(255), default="")
     ip: Mapped[str] = mapped_column(String(64), default="")
 
@@ -100,9 +99,9 @@ class Project(Base):
     created_by_user_id: Mapped[Optional[str]] = mapped_column(
         String(32), ForeignKey("users.id", ondelete="SET NULL")
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+        UtcDateTime(), default=_utcnow, onupdate=_utcnow
     )
 
     created_by: Mapped[Optional[User]] = relationship(
@@ -136,9 +135,9 @@ class Run(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued", index=True)
     error_message: Mapped[str] = mapped_column(Text, default="")
     workspace_path: Mapped[str] = mapped_column(String(512), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_utcnow)
+    started_at: Mapped[Optional[datetime]] = mapped_column(UtcDateTime())
+    finished_at: Mapped[Optional[datetime]] = mapped_column(UtcDateTime())
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)

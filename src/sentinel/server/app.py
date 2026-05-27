@@ -82,18 +82,50 @@ def create_app() -> FastAPI:
 def _mount_spa_if_present(app: FastAPI) -> None:
     """Mount the pre-built React SPA if its static assets are packaged.
 
-    The SPA is built into src/sentinel/server/static/ at release time
-    (next session). If the dir is missing (dev install before frontend
-    build), we expose a placeholder at / so the API stays usable.
+    SPA routing needs a catch-all that returns index.html for any path
+    that is not /api/* and not a real static file. We mount the assets
+    bundle at /assets, then register a catch-all that resolves to
+    index.html so the React Router can take over client-side. If the
+    static dir is missing (dev install before `npm run build:install`),
+    we expose a JSON placeholder.
     """
+    from pathlib import Path
+
     try:
         static_root = resources.files("sentinel.server").joinpath("static")
-        static_path = str(static_root)
+        static_path = Path(str(static_root))
     except (ModuleNotFoundError, FileNotFoundError):
         static_path = None
 
-    if static_path and (static_root.joinpath("index.html").is_file()):
-        app.mount("/", StaticFiles(directory=static_path, html=True), name="spa")
+    index_html = static_path / "index.html" if static_path else None
+
+    if static_path and index_html and index_html.is_file():
+        from fastapi.responses import FileResponse
+
+        assets_dir = static_path / "assets"
+        if assets_dir.is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(assets_dir)),
+                name="spa-assets",
+            )
+
+        @app.get("/", include_in_schema=False)
+        def _spa_root():
+            return FileResponse(str(index_html))
+
+        # Catch-all for SPA client routes (e.g. /projects, /runs/abc).
+        # Excludes anything starting with /api or /assets via the route
+        # registration order (those routers come first).
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def _spa_fallback(full_path: str):
+            # If a real static file at the top level exists, serve it
+            # (favicon.svg, robots.txt, etc.)
+            candidate = static_path / full_path
+            if candidate.is_file() and static_path.resolve() in candidate.resolve().parents:
+                return FileResponse(str(candidate))
+            return FileResponse(str(index_html))
+
         return
 
     @app.get("/", include_in_schema=False)
@@ -103,7 +135,12 @@ def _mount_spa_if_present(app: FastAPI) -> None:
                 "ok": True,
                 "service": "sentinel-studio",
                 "version": __version__,
-                "note": "Frontend SPA not bundled in this install. API is live at /api/*.",
+                "note": (
+                    "Frontend SPA not bundled in this install. "
+                    "Run `npm --prefix web run build:install` from the source "
+                    "tree, or install a release that includes the prebuilt UI."
+                ),
+                "api_root": "/api",
                 "docs": "/docs",
             }
         )
