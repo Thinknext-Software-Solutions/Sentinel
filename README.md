@@ -79,25 +79,7 @@ sentinel server up                                # http://127.0.0.1:8000
 
 Three global roles: **admin** (manage users + everything), **member** (create projects, trigger runs), **viewer** (read-only). All state lives at `~/.local/share/sentinel/studio.db` (override with `SENTINEL_SERVER_HOME`).
 
-### Sign in
-
-![Studio login](docs/studio-screenshots/01-login.png)
-
-### Projects: each project is a named app with its own URL + config
-
-![Studio projects](docs/studio-screenshots/02-projects.png)
-
-### Project detail: trigger a run, see history, edit the per-project sentinel.yaml
-
-![Studio project detail](docs/studio-screenshots/03-project-detail.png)
-
-### Run detail: scenarios, step failures, visual diffs, a11y violations, cost
-
-![Studio run detail](docs/studio-screenshots/04-run-detail.png)
-
-### Admin: invite users, change roles, deactivate
-
-![Studio admin users](docs/studio-screenshots/05-admin-users.png)
+![Sentinel Studio walkthrough](docs/studio-walkthrough.gif)
 
 Studio re-uses your existing LLM credentials from `~/.config/sentinel/config.yaml`, so a project that says "provider: claude_code" will run for free if your subscription is configured. Studio is bundled as an optional install extra (`[server]`) so the core CLI install stays slim. The frontend is React + Vite + TanStack Query, served from the same FastAPI app via a SPA fallback.
 
@@ -212,19 +194,6 @@ a11y:
    │ SentinelReport │  Scenarios + visual diffs + a11y violations + cost
    └──────────────┘
 ```
-
-## Roadmap
-
-| Version | Status | Highlights |
-|---|---|---|
-| **0.1.0a1 → 0.1.0a3** | Shipped 2026-05-26 | Web testing via Playwright, visual regression (PIL), WCAG 2.1 AA scan via axe-core, multi-page exploration, self-healing tests, REST API contract testing (OpenAPI + URL-probe modes) |
-| **0.1.0** | Shipped 2026-05-26 | Standalone release: vendored own LLM client + config layer, zero runtime dependency on any other ThinkNext package. Per-provider install extras |
-| **0.1.1 → 0.1.8** | Shipped 2026-05-26 | Eight dogfooding-driven patches against a real Next.js 15 app: asyncio fix for self-heal inside Playwright; `wait_for_url` event listener for SPA navigation (the polling approach never saw the URL update); regex support in `assert_url` and `assert_text`; `url=` routing for `wait_for`; glob-to-regex escape correctness; longer reasoning length for repair envelopes |
-| v0.2 | Planned Q4 2026 | CI integration (GitHub Actions / GitLab CI / Bitbucket Pipelines / Azure Pipelines), parallel scenario execution, storage-state seeding for authenticated flows |
-| v0.3 | Planned Q1 2027 | Mobile (React Native via Detox or Maestro), cross-browser (Firefox / WebKit), test-history dashboard |
-| v1.0 | Planned mid-2027 | Stable API, full coverage of web + API + mobile + visual + a11y, baselined against real-world OSS apps |
-
-Roadmap is directional. The 0.1.1 → 0.1.8 series is a strong signal that the LLM-prompt / runner contract is still being discovered in the wild; we expect more patches as Sentinel meets non-Next.js frameworks, auth-gated flows, iframes, and complex multi-step forms. File issues against the current `0.1.x` line.
 
 ## License
 
