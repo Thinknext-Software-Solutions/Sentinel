@@ -42,7 +42,7 @@ class TestSelfHealing:
 
         # Stub regenerate_step to return a working selector
         def fake_repair(*, original_step, failure_message, scenario_name, page_html, llm, temperature=0.0):
-            from cascade.llm import LLMUsage
+            from sentinel.llm import LLMUsage
             repaired = original_step.model_copy(update={"selector": ".real-btn"})
             return StepRepair(
                 repaired_step=repaired,
@@ -151,7 +151,7 @@ class TestSelfHealing:
         )
 
         def fake_repair(*, original_step, failure_message, scenario_name, page_html, llm, temperature=0.0):
-            from cascade.llm import LLMUsage
+            from sentinel.llm import LLMUsage
             # Returns a STILL-missing selector
             repaired = original_step.model_copy(update={"selector": ".also-missing"})
             return StepRepair(

@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from cascade.llm import LLMClient, LLMResponse, LLMUsage
+from sentinel.llm import LLMClient, LLMResponse, LLMUsage
 
 from sentinel.schemas import Scenario, Step, TestPlan
 

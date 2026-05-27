@@ -1,13 +1,12 @@
 """sentinel command-line interface.
 
-Three commands for v0.1.0a1:
+Commands:
 
   sentinel run <url>    Full pipeline: explore -> plan -> test -> report
-  sentinel init         Scaffold sentinel.yaml
+  sentinel api <url>    REST API contract tests
+  sentinel configure    Set LLM credentials in ~/.config/sentinel/config.yaml
+  sentinel init         Scaffold sentinel.yaml in the current directory
   sentinel version      Print version
-
-Credentials are reused from cascade-agent's user config (Sentinel
-shares LLM clients with Cascade and Relay so users configure once).
 """
 
 from __future__ import annotations
@@ -18,10 +17,17 @@ from pathlib import Path
 
 import click
 
-from cascade.error_format import echo_error
-from cascade.exceptions import CascadeError
-from cascade.llm import build_client_from_credentials
-from cascade.user_config import load_user_config, resolve_llm_credentials
+from .error_format import echo_error
+from .exceptions import SentinelError
+from .llm import SUPPORTED_PROVIDERS as SUPPORTED_LLM_PROVIDERS, build_client_from_credentials
+from .user_config import (
+    LLMProviderConfig,
+    config_path,
+    load_user_config,
+    mask_secret,
+    resolve_llm_credentials,
+    save_user_config,
+)
 
 from . import __version__
 from .agent import run_sentinel
@@ -60,8 +66,8 @@ def init(force: bool) -> None:
     click.echo()
     click.echo("Sentinel configured. Next steps:")
     click.echo("  1. (One-time) install Chromium: `playwright install chromium`")
-    click.echo("  2. Set your LLM: `cascade configure llm anthropic --key ...`")
-    click.echo("     (Sentinel reuses Cascade's credentials.)")
+    click.echo("  2. Set your LLM: `sentinel configure llm anthropic --key ...`")
+    click.echo("     Or use Claude Code (no API key): `sentinel configure llm claude_code --set-default`")
     click.echo("  3. Run a smoke test: `sentinel run https://your-app.com`")
 
 
@@ -100,7 +106,7 @@ def run(target_url: str, workspace: Path, config_dir: Path | None, no_explore: b
             model_override=config.agent.model,
         )
         llm = build_client_from_credentials(llm_creds)
-    except CascadeError as exc:
+    except SentinelError as exc:
         echo_error(exc)
         sys.exit(1)
 
@@ -119,7 +125,7 @@ def run(target_url: str, workspace: Path, config_dir: Path | None, no_explore: b
             workspace_dir=workspace.resolve(),
             explore_links=not no_explore,
         )
-    except CascadeError as exc:
+    except SentinelError as exc:
         echo_error(exc)
         sys.exit(1)
     except Exception as exc:  # noqa: BLE001
@@ -196,7 +202,7 @@ def api_cmd(
             model_override=config.agent.model,
         )
         llm = build_client_from_credentials(llm_creds)
-    except CascadeError as exc:
+    except SentinelError as exc:
         echo_error(exc)
         sys.exit(1)
 
@@ -238,7 +244,7 @@ def api_cmd(
                 llm=llm,
                 temperature=config.agent.temperature,
             )
-    except CascadeError as exc:
+    except SentinelError as exc:
         echo_error(exc)
         sys.exit(1)
     except Exception as exc:  # noqa: BLE001
@@ -271,14 +277,14 @@ def _load_spec(spec_arg: str) -> dict:
         try:
             import httpx  # type: ignore
         except ImportError as exc:
-            raise CascadeError("httpx not installed") from exc
+            raise SentinelError("httpx not installed") from exc
         r = httpx.get(spec_arg, timeout=15.0)
         r.raise_for_status()
         raw = r.text
     else:
         path = Path(spec_arg)
         if not path.exists():
-            raise CascadeError(f"spec file not found: {spec_arg}")
+            raise SentinelError(f"spec file not found: {spec_arg}")
         raw = path.read_text()
 
     # Try JSON first, fall back to YAML
@@ -290,7 +296,7 @@ def _load_spec(spec_arg: str) -> dict:
         import yaml
         return yaml.safe_load(raw)
     except Exception as exc:
-        raise CascadeError(
+        raise SentinelError(
             f"could not parse {spec_arg} as JSON or YAML",
             hint=str(exc),
         ) from exc
@@ -378,6 +384,65 @@ def _render_report(report) -> None:
         f"  cost:    ${report.total_llm_cost_usd:.2f} "
         f"({report.total_input_tokens:,} in / {report.total_output_tokens:,} out tokens)"
     )
+
+
+@cli.group()
+def configure() -> None:
+    """Set up credentials at ~/.config/sentinel/config.yaml."""
+
+
+@configure.command("show")
+def configure_show() -> None:
+    """Show the effective user config (with secrets masked)."""
+    cfg = load_user_config()
+    click.echo(f"Config file: {config_path()}")
+    click.echo("Defaults:")
+    click.echo(f"  llm_provider:   {cfg.defaults.llm_provider}")
+    click.echo()
+    if cfg.llm_providers:
+        click.echo("LLM providers:")
+        for name, p in cfg.llm_providers.items():
+            click.echo(
+                f"  {name}: key={mask_secret(p.api_key)} "
+                f"model={p.default_model or '(default)'} "
+                f"base_url={p.base_url or '(default)'}"
+            )
+
+
+@configure.command("llm")
+@click.argument(
+    "provider",
+    type=click.Choice(list(SUPPORTED_LLM_PROVIDERS), case_sensitive=False),
+)
+@click.option("--key", default=None, help="API key for this provider.")
+@click.option("--model", default=None, help="Default model identifier.")
+@click.option("--base-url", default=None, help="Override the API base URL.")
+@click.option("--set-default", is_flag=True, help="Make this the default LLM provider.")
+def configure_llm(
+    provider: str,
+    key: str | None,
+    model: str | None,
+    base_url: str | None,
+    set_default: bool,
+) -> None:
+    """Configure an LLM provider (e.g. `sentinel configure llm openai --key sk-...`)."""
+    cfg = load_user_config()
+    existing = cfg.llm_providers.get(provider.lower(), LLMProviderConfig())
+    updated = LLMProviderConfig(
+        api_key=key if key is not None else existing.api_key,
+        default_model=model if model is not None else existing.default_model,
+        base_url=base_url if base_url is not None else existing.base_url,
+    )
+    new_providers = dict(cfg.llm_providers)
+    new_providers[provider.lower()] = updated
+    new_defaults = cfg.defaults.model_copy(
+        update={"llm_provider": provider.lower()} if set_default else {}
+    )
+    new_cfg = cfg.model_copy(update={"llm_providers": new_providers, "defaults": new_defaults})
+    save_user_config(new_cfg)
+    click.echo(f"Updated LLM provider '{provider}'.")
+    if set_default:
+        click.echo(f"Set '{provider}' as the default LLM provider.")
 
 
 @cli.command()

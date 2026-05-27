@@ -16,7 +16,7 @@ import logging
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-from cascade.llm import LLMClient
+from .llm import LLMClient
 
 from .browser import open_session
 from .config import SentinelConfig

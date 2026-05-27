@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from cascade.llm import LLMClient
+from .llm import LLMClient
 
 from .a11y import scan_page
 from .browser import open_session, run_step

@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from cascade.llm import LLMClient, LLMUsage
+from .llm import LLMClient, LLMUsage
 
 from .api_schemas import APITestPlan
 

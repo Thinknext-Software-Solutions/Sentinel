@@ -1,7 +1,7 @@
 [project]
 name = "sentinel-agent"
-version = "0.1.0a3"
-description = "AI-driven functional testing agent. Point it at a URL; it explores the app, generates a test plan, runs it, and reports findings. Web + visual regression + accessibility in v0.1; API + mobile in later versions."
+version = "0.1.0"
+description = "AI-driven functional testing agent. Point it at a URL; it explores the app, generates a test plan, runs it, and reports findings. Web (Playwright) + visual regression + accessibility (axe-core) + REST API contract tests, all driven by your choice of LLM."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ keywords = [
     "anthropic", "openai", "claude", "gemini",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
@@ -28,11 +28,11 @@ classifiers = [
     "Environment :: Console",
 ]
 
-# Sentinel depends on cascade-agent for LLM client abstractions and
-# error types so the three ThinkNext products share one LLM layer.
+# Sentinel is standalone: it carries its own LLM client layer so it
+# does not depend on any other ThinkNext package at runtime.
 # Playwright drives the browser. Pillow handles screenshot diffing.
+# httpx powers the API testing module.
 dependencies = [
-    "cascade-agent>=0.1.0a1",
     "click>=8.1.0",
     "pydantic>=2.0",
     "PyYAML>=6.0",
@@ -42,6 +42,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# LLM provider extras. Install the one(s) you need:
+#   pip install 'sentinel-agent[anthropic]'
+#   pip install 'sentinel-agent[claude-code]'
+#   pip install 'sentinel-agent[openai,google]'
+anthropic = ["anthropic>=0.30"]
+openai = ["openai>=1.30"]
+google = ["google-generativeai>=0.7"]
+claude-code = ["claude-agent-sdk>=0.1"]
+all = [
+    "anthropic>=0.30",
+    "openai>=1.30",
+    "google-generativeai>=0.7",
+    "claude-agent-sdk>=0.1",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",

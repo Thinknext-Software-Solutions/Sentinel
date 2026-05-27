@@ -33,12 +33,17 @@ In one command, the agent:
 
 The same teams that need [Cascade](https://cascadeagent.dev) (meeting-to-PR) and [Relay](https://github.com/Thinknext-Software-Solutions/Relay) (issue-to-PR) need a way to verify that the PRs those agents produce actually work. Hand-writing Playwright tests for every feature is the bottleneck. Sentinel removes the bottleneck: generate tests with the same LLM that writes the code.
 
-Sentinel sits next to Cascade and Relay as the third ThinkNext open-source product. Shared internals (LLM clients, error types) come from `cascade-agent`.
+Sentinel is fully standalone. It carries its own LLM-client layer and config so it does not depend on any other ThinkNext package at runtime.
 
 ## Install
 
 ```bash
-pip install sentinel-agent
+# Core install + the LLM provider you want:
+pip install 'sentinel-agent[anthropic]'        # Anthropic Claude
+pip install 'sentinel-agent[openai]'           # OpenAI
+pip install 'sentinel-agent[google]'           # Google Gemini
+pip install 'sentinel-agent[claude-code]'      # Local Claude Code subscription, no API key
+pip install 'sentinel-agent[all]'              # All providers
 
 # One-time: install the Chromium binary Playwright needs
 playwright install chromium
@@ -47,8 +52,11 @@ playwright install chromium
 ## Configure
 
 ```bash
-# Reuses cascade-agent's credentials; configure once for all three products
-cascade configure llm anthropic --key sk-ant-xxx --set-default
+# Set up an LLM provider. Credentials live at ~/.config/sentinel/config.yaml.
+sentinel configure llm anthropic --key sk-ant-xxx --set-default
+
+# Or, if you have Claude Code installed locally (no API key needed):
+sentinel configure llm claude_code --set-default
 ```
 
 If you want a project-local config (highly recommended; lets you set viewport, baseline directory, accessibility thresholds):
@@ -82,18 +90,19 @@ sentinel run https://cascadeagent.dev
 #   cost:    $0.04 (5,210 in / 980 out tokens)
 ```
 
-## What ships in v0.1.0a1
+## What ships in v0.1.0
 
-| Capability | Status | Module |
-|---|---|---|
-| Web testing via Playwright | ✅ | `sentinel.browser`, `sentinel.runner` |
-| LLM-driven test plan generation | ✅ | `sentinel.planner` |
-| Visual regression (PIL pixel diff) | ✅ | `sentinel.visual` |
-| Accessibility scan (axe-core 4.10) | ✅ | `sentinel.a11y` |
-| Multi-page exploration | 🚧 v0.1.0a2 | (plans are single-URL today) |
-| API contract testing (OpenAPI) | 🚧 v0.1.0a2 | |
-| Self-healing tests (re-plan on failure) | 🚧 v0.1.0a2 | |
-| Mobile (React Native via Detox) | 🚧 v0.1.0a3 | |
+| Capability | Module |
+|---|---|
+| Web testing via Playwright | `sentinel.browser`, `sentinel.runner` |
+| LLM-driven test plan generation | `sentinel.planner` |
+| Self-healing tests (LLM re-plan on failed step + retry once) | `sentinel.planner.regenerate_step` |
+| Multi-page exploration (up to 4 same-origin links) | `sentinel.agent` |
+| Visual regression (PIL pixel diff) | `sentinel.visual` |
+| Accessibility scan (axe-core 4.10, WCAG 2.1 AA) | `sentinel.a11y` |
+| REST API contract testing (OpenAPI + URL-probe modes) | `sentinel.api_*` |
+| Multi-LLM (Anthropic / OpenAI / Google / Claude Code / Ollama) | `sentinel.llm` |
+| Mobile (React Native via Detox) | planned for a future release |
 
 ## How it differs from existing tools
 

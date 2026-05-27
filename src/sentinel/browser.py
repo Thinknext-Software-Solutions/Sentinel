@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
 
-from cascade.exceptions import CascadeError
+from .exceptions import SentinelError
 
 from .config import BrowserConfig
 from .schemas import Step
@@ -75,7 +75,7 @@ def open_session(
     try:
         from playwright.sync_api import sync_playwright  # type: ignore
     except ImportError as exc:
-        raise CascadeError(
+        raise SentinelError(
             "Playwright is not installed.",
             hint=(
                 "Run: pip install sentinel-agent  (Playwright is a dependency). "
@@ -87,7 +87,7 @@ def open_session(
         try:
             browser = pw.chromium.launch(headless=cfg.headless)
         except Exception as exc:
-            raise CascadeError(
+            raise SentinelError(
                 "Could not launch Chromium",
                 hint=(
                     "Run `playwright install chromium` once to download "

@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from cascade.llm import LLMClient, LLMUsage
+from .llm import LLMClient, LLMUsage
 from pydantic import BaseModel, ConfigDict, Field
 
 from .schemas import Step, TestPlan

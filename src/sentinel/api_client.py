@@ -17,7 +17,7 @@ import time
 from typing import Any, Optional
 from urllib.parse import urljoin
 
-from cascade.exceptions import CascadeError
+from .exceptions import SentinelError
 
 from .api_schemas import (
     APIAssertion,
@@ -46,7 +46,7 @@ def execute_scenario(
     try:
         import httpx  # type: ignore
     except ImportError as exc:
-        raise CascadeError(
+        raise SentinelError(
             "httpx is not installed.",
             hint="pip install sentinel-agent (httpx is a dependency).",
         ) from exc

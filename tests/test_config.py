@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cascade.exceptions import CascadeError
+from sentinel.exceptions import SentinelError
 
 from sentinel.config import DEFAULT_SENTINEL_YAML, SentinelConfig, load_config
 
@@ -48,7 +48,7 @@ visual:
 
     def test_invalid_yaml(self, tmp_path):
         (tmp_path / "sentinel.yaml").write_text("not: : valid: yaml: : :")
-        with pytest.raises(CascadeError, match="not valid YAML"):
+        with pytest.raises(SentinelError, match="not valid YAML"):
             load_config(tmp_path)
 
     def test_missing_file_returns_defaults(self, tmp_path):

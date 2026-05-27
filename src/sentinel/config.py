@@ -12,7 +12,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from cascade.exceptions import CascadeError
+from .exceptions import SentinelError
 
 
 class AgentConfig(BaseModel):
@@ -100,18 +100,18 @@ def load_config(repo_root: Optional[Path] = None) -> SentinelConfig:
     try:
         raw = yaml.safe_load(cfg_path.read_text()) or {}
     except yaml.YAMLError as exc:
-        raise CascadeError(
+        raise SentinelError(
             f"sentinel.yaml at {cfg_path} is not valid YAML",
             hint=str(exc),
         ) from exc
     if not isinstance(raw, dict):
-        raise CascadeError(
+        raise SentinelError(
             f"sentinel.yaml at {cfg_path} must be a mapping at the top level"
         )
     try:
         return SentinelConfig.model_validate(raw)
     except Exception as exc:
-        raise CascadeError(
+        raise SentinelError(
             f"sentinel.yaml at {cfg_path} is invalid", hint=str(exc)
         ) from exc
 
