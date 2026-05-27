@@ -162,8 +162,8 @@ class _RepairedStepEnvelope(BaseModel):
     reasoning: str = Field(
         ...,
         min_length=10,
-        max_length=400,
-        description="One-line explanation of why the original step failed and how this fix addresses it.",
+        max_length=2000,
+        description="Brief explanation of why the original step failed and how this fix addresses it.",
     )
     step: Step
 

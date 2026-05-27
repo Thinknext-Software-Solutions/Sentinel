@@ -170,11 +170,18 @@ def run_step(session: BrowserSession, step: Step) -> StepResult:
             if not step.value:
                 return StepResult(False, "assert_url step missing value pattern")
             current = page.url
-            if step.value not in current:
-                return StepResult(
-                    False, f"URL {current!r} does not match pattern {step.value!r}"
-                )
-            return StepResult(True)
+            pattern = step.value
+            if pattern in current:
+                return StepResult(True)
+            try:
+                import re
+                if re.search(pattern, current):
+                    return StepResult(True)
+            except re.error:
+                pass
+            return StepResult(
+                False, f"URL {current!r} does not match pattern {pattern!r}"
+            )
 
         if step.action == "a11y_scan":
             # Handled by a11y module; runner detects this action and
