@@ -148,14 +148,19 @@ class ClaudeCodeClient(LLMClient):
         )
 
     def _collect_response(self, prompt: str, options) -> str:
-        """Run the async query and collect text from message stream."""
+        """Run the async query and collect text from message stream.
+
+        Works whether or not a parent event loop is already running.
+        Playwright's sync API installs an event loop on its worker thread,
+        and asyncio.run() refuses to nest -- so when a loop is detected
+        we run the coroutine in a fresh thread with its own loop.
+        """
         import asyncio
+        import concurrent.futures
 
         async def _run() -> str:
             chunks: list[str] = []
             async for message in self._query(prompt=prompt, options=options):
-                # The SDK yields message objects with different shapes; we look for
-                # text content blocks on AssistantMessage instances.
                 content = getattr(message, "content", None)
                 if not content:
                     continue
@@ -165,7 +170,17 @@ class ClaudeCodeClient(LLMClient):
                         chunks.append(text)
             return "".join(chunks)
 
-        return asyncio.run(asyncio.wait_for(_run(), timeout=self._timeout_seconds))
+        def _runner() -> str:
+            return asyncio.run(asyncio.wait_for(_run(), timeout=self._timeout_seconds))
+
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return _runner()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_runner)
+            return future.result(timeout=self._timeout_seconds + 5)
 
 
 def _extract_json(text: str) -> Optional[str]:
