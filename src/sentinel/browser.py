@@ -138,7 +138,36 @@ def run_step(session: BrowserSession, step: Step) -> StepResult:
         if step.action == "wait_for":
             if not step.selector:
                 return StepResult(False, "wait_for step missing selector")
-            page.wait_for_selector(step.selector, timeout=step.timeout_ms)
+            sel = step.selector
+            # LLMs commonly emit url=** or url=/path-style selectors for
+            # wait_for, treating it as a navigation wait. Playwright has no
+            # 'url' selector engine, so we route those to wait_for_url.
+            if sel.startswith("url="):
+                import re
+                pattern = sel[4:]
+
+                # Convert glob-style pattern to regex. Escape every char
+                # first, then turn the escaped glob markers back into
+                # regex equivalents -- so '?' in the path stays literal.
+                escaped = re.escape(pattern)
+                glob_re = escaped.replace(r"\*\*", ".*").replace(r"\*", "[^/]*")
+
+                def _matches(url: str) -> bool:
+                    if pattern in url:
+                        return True
+                    try:
+                        return bool(re.search(glob_re, url))
+                    except re.error:
+                        return False
+
+                try:
+                    page.wait_for_url(_matches, timeout=step.timeout_ms)
+                    return StepResult(True)
+                except Exception:
+                    return StepResult(
+                        False, f"URL {page.url!r} does not match wait_for pattern {pattern!r}"
+                    )
+            page.wait_for_selector(sel, timeout=step.timeout_ms)
             return StepResult(True)
 
         if step.action == "screenshot":
@@ -150,11 +179,17 @@ def run_step(session: BrowserSession, step: Step) -> StepResult:
             if not step.value:
                 return StepResult(False, "assert_text step missing value")
             content = page.content()
-            if step.value not in content:
-                return StepResult(
-                    False, f"text {step.value!r} not found on page"
-                )
-            return StepResult(True)
+            if step.value in content:
+                return StepResult(True)
+            try:
+                import re
+                if re.search(step.value, content):
+                    return StepResult(True)
+            except re.error:
+                pass
+            return StepResult(
+                False, f"text {step.value!r} not found on page"
+            )
 
         if step.action == "assert_visible":
             if not step.selector:
