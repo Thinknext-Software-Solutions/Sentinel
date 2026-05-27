@@ -445,6 +445,112 @@ def configure_llm(
         click.echo(f"Set '{provider}' as the default LLM provider.")
 
 
+# ---------------------------------------------------------------------------
+# sentinel server: Studio (multi-user web UI)
+# ---------------------------------------------------------------------------
+
+
+@cli.group()
+def server() -> None:
+    """Sentinel Studio: self-hosted multi-user web UI for projects + runs.
+
+    Requires the [server] install extra:
+        pip install 'sentinel-agent[server]'
+    """
+
+
+@server.command("init")
+@click.option("--email", default=None, help="Admin email (prompted if omitted).")
+@click.option(
+    "--password",
+    default=None,
+    help="Admin password (prompted if omitted; min 8 chars).",
+)
+@click.option("--name", default="", help="Admin display name.")
+def server_init(email: str | None, password: str | None, name: str) -> None:
+    """Initialize Studio: create the SQLite DB and the first admin user.
+
+    Safe to re-run. Re-running with an existing admin email resets the
+    admin's password and promotes them to admin if they were demoted.
+    """
+    try:
+        from .server.bootstrap import server_init_flow
+        from .server.paths import db_path, server_home
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                "Studio dependencies not installed. "
+                "Run: pip install 'sentinel-agent[server]'",
+                fg="red",
+            ),
+            err=True,
+        )
+        click.echo(f"  detail: {exc}", err=True)
+        sys.exit(1)
+
+    user = server_init_flow(email=email, password=password, name=name)
+    click.echo()
+    click.echo(click.style("Studio initialized.", fg="green"))
+    click.echo(f"  Data dir:  {server_home()}")
+    click.echo(f"  DB:        {db_path()}")
+    click.echo(f"  Admin:     {user.email}")
+    click.echo()
+    click.echo("Next: `sentinel server up` to start the web UI.")
+
+
+@server.command("up")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
+@click.option("--port", default=8000, type=int, show_default=True)
+@click.option(
+    "--reload",
+    is_flag=True,
+    help="Enable uvicorn auto-reload (dev only).",
+)
+def server_up(host: str, port: int, reload: bool) -> None:
+    """Start the Studio web server."""
+    try:
+        import uvicorn  # noqa: F401
+        from .server.bootstrap import init_database, ensure_secret_key
+        from .server.paths import db_path
+    except ImportError as exc:
+        click.echo(
+            click.style(
+                "Studio dependencies not installed. "
+                "Run: pip install 'sentinel-agent[server]'",
+                fg="red",
+            ),
+            err=True,
+        )
+        click.echo(f"  detail: {exc}", err=True)
+        sys.exit(1)
+
+    init_database()
+    ensure_secret_key()
+
+    click.echo()
+    click.echo(f"==> Sentinel Studio on http://{host}:{port}")
+    click.echo(f"    DB: {db_path()}")
+    if host == "0.0.0.0":
+        click.echo(
+            click.style(
+                "    WARNING: binding to 0.0.0.0 exposes Studio on the network. "
+                "Use a reverse proxy with TLS in production.",
+                fg="yellow",
+            )
+        )
+    click.echo()
+
+    import uvicorn
+    uvicorn.run(
+        "sentinel.server.app:create_app",
+        host=host,
+        port=port,
+        reload=reload,
+        factory=True,
+        log_level="info",
+    )
+
+
 @cli.command()
 def version() -> None:
     """Print the Sentinel version."""

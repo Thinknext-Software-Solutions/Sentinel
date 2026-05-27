@@ -1,6 +1,6 @@
 [project]
 name = "sentinel-agent"
-version = "0.1.8"
+version = "0.2.0.dev0"
 description = "AI-driven functional testing agent. Point it at a URL; it explores the app, generates a test plan, runs it, and reports findings. Web (Playwright) + visual regression + accessibility (axe-core) + REST API contract tests, all driven by your choice of LLM."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -50,6 +50,20 @@ anthropic = ["anthropic>=0.30"]
 openai = ["openai>=1.30"]
 google = ["google-generativeai>=0.7"]
 claude-code = ["claude-agent-sdk>=0.1"]
+# Sentinel Studio: self-hosted multi-user team server.
+#   pip install 'sentinel-agent[server]'
+#   sentinel server init
+#   sentinel server up
+server = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "argon2-cffi>=23.1",
+    "itsdangerous>=2.2",
+    "python-multipart>=0.0.9",
+    "email-validator>=2.2",
+]
 all = [
     "anthropic>=0.30",
     "openai>=1.30",
