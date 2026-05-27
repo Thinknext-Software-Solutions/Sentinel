@@ -1,15 +1,15 @@
 # Sentinel
 
-> Point it at a URL. It explores the app, generates a test plan, runs it, and reports findings. Web + visual regression + accessibility in v0.1; API + mobile in later versions.
+> Point it at a URL. It explores the app, generates a test plan, runs it, and reports failed scenarios, visual regressions, accessibility violations, and REST API contract findings.
 
 [![PyPI](https://img.shields.io/pypi/v/sentinel-agent.svg?label=PyPI&color=22d3ee)](https://pypi.org/project/sentinel-agent/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Status](https://img.shields.io/badge/status-alpha-22d3ee.svg)](#roadmap)
+[![Status](https://img.shields.io/badge/status-beta-22d3ee.svg)](#roadmap)
 [![Built by ThinkNext](https://img.shields.io/badge/built%20by-ThinkNext-22d3ee.svg)](https://thinknextsoftware.com)
 
-> **Status**: alpha, live on PyPI as `sentinel-agent==0.1.0a1`. Web + visual regression + accessibility ship today. API testing in v0.1.0a2; mobile (React Native) in v0.1.0a3.
+> **Status**: beta, live on PyPI as `sentinel-agent` (latest 0.1.x). Standalone: zero runtime dependency on any other ThinkNext package. Web functional testing + self-healing + visual regression + WCAG 2.1 AA accessibility + REST API contract tests all ship today. Mobile (React Native) is planned for a future release.
 >
-> **Install**: `pip install sentinel-agent` &middot; **Repo**: [GitHub](https://github.com/Thinknext-Software-Solutions/Sentinel) &middot; **Issues**: [file one](https://github.com/Thinknext-Software-Solutions/Sentinel/issues)
+> **Install**: `pip install 'sentinel-agent[anthropic]'` (or `[claude-code]`, `[openai]`, `[google]`, `[all]`). **Repo**: [GitHub](https://github.com/Thinknext-Software-Solutions/Sentinel). **Issues**: [file one](https://github.com/Thinknext-Software-Solutions/Sentinel/issues).
 
 ## What it does
 
@@ -115,7 +115,7 @@ sentinel run https://cascadeagent.dev
 | Accessibility scan | ❌ | partial (plugin) | ❌ | ✅ |
 | Open source | ✅ | ✅ | ❌ | ✅ |
 
-Sentinel is for teams who want test coverage without spending the engineering hours to author it. The trade-off is that AI-generated tests have failure modes hand-written tests do not (e.g. an LLM picks a fragile selector). The self-healing v0.1.0a2 feature is the answer to that.
+Sentinel is for teams who want test coverage without spending the engineering hours to author it. The trade-off is that AI-generated tests have failure modes hand-written tests do not (e.g. an LLM picks a fragile selector). The self-healing path is the answer to that: on a failed step, the runner asks the LLM for a more specific selector with the failure context and retries once.
 
 ## Configuration
 
@@ -180,11 +180,14 @@ a11y:
 
 | Version | Status | Highlights |
 |---|---|---|
-| **v0.1.0a1** | Shipped (2026-05-26) | Web testing, visual regression, accessibility |
-| v0.1.0a2 | Planned | Multi-page exploration, self-healing tests, API contract testing |
-| v0.1.0a3 | Planned | Mobile (React Native via Detox or Maestro) |
-| v0.2 | Q4 2026 | CI integration (GitHub Actions / GitLab CI / Bitbucket / Azure), parallel execution |
-| v1.0 | Mid-2027 | Stable API, full coverage of web + API + mobile + visual + a11y, baselined |
+| **0.1.0a1 → 0.1.0a3** | Shipped 2026-05-26 | Web testing via Playwright, visual regression (PIL), WCAG 2.1 AA scan via axe-core, multi-page exploration, self-healing tests, REST API contract testing (OpenAPI + URL-probe modes) |
+| **0.1.0** | Shipped 2026-05-26 | Standalone release: vendored own LLM client + config layer, zero runtime dependency on any other ThinkNext package. Per-provider install extras |
+| **0.1.1 → 0.1.8** | Shipped 2026-05-26 | Eight dogfooding-driven patches against a real Next.js 15 app: asyncio fix for self-heal inside Playwright; `wait_for_url` event listener for SPA navigation (the polling approach never saw the URL update); regex support in `assert_url` and `assert_text`; `url=` routing for `wait_for`; glob-to-regex escape correctness; longer reasoning length for repair envelopes |
+| v0.2 | Planned Q4 2026 | CI integration (GitHub Actions / GitLab CI / Bitbucket Pipelines / Azure Pipelines), parallel scenario execution, storage-state seeding for authenticated flows |
+| v0.3 | Planned Q1 2027 | Mobile (React Native via Detox or Maestro), cross-browser (Firefox / WebKit), test-history dashboard |
+| v1.0 | Planned mid-2027 | Stable API, full coverage of web + API + mobile + visual + a11y, baselined against real-world OSS apps |
+
+Roadmap is directional. The 0.1.1 → 0.1.8 series is a strong signal that the LLM-prompt / runner contract is still being discovered in the wild; we expect more patches as Sentinel meets non-Next.js frameworks, auth-gated flows, iframes, and complex multi-step forms. File issues against the current `0.1.x` line.
 
 ## License
 
