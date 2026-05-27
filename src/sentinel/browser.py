@@ -169,19 +169,31 @@ def run_step(session: BrowserSession, step: Step) -> StepResult:
         if step.action == "assert_url":
             if not step.value:
                 return StepResult(False, "assert_url step missing value pattern")
-            current = page.url
             pattern = step.value
-            if pattern in current:
+            import re
+
+            def _matches(url: str) -> bool:
+                if pattern in url:
+                    return True
+                try:
+                    return bool(re.search(pattern, url))
+                except re.error:
+                    return False
+
+            # page.url is a sync property that lags client-side SPA
+            # navigations (Next.js / React Router): the click resolves,
+            # the route changes, but page.url stays at the old value
+            # until the next event tick. wait_for_url uses Playwright's
+            # navigation event listener, which fires reliably.
+            if _matches(page.url):
                 return StepResult(True)
             try:
-                import re
-                if re.search(pattern, current):
-                    return StepResult(True)
-            except re.error:
-                pass
-            return StepResult(
-                False, f"URL {current!r} does not match pattern {pattern!r}"
-            )
+                page.wait_for_url(_matches, timeout=5000)
+                return StepResult(True)
+            except Exception:
+                return StepResult(
+                    False, f"URL {page.url!r} does not match pattern {pattern!r}"
+                )
 
         if step.action == "a11y_scan":
             # Handled by a11y module; runner detects this action and
